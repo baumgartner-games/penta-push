@@ -2,6 +2,8 @@
 
 ![Splash Image](https://raw.githubusercontent.com/baumgartner-games/penta-push/refs/heads/main/public/splash.png)
 
+In Progress:
+
 **PentaPush** ist ein strategisches Webspiel für zwei Personen, das auf einem 5×5-Raster gespielt wird. Ziel ist es, fünf eigene Symbole in eine Reihe zu bringen – horizontal, vertikal oder diagonal – während du Felder verschiebst und den Spielplan ständig veränderst.
 
 > 🧩 Inspiriert von Spielen mit Push-Mechanik und minimalistischem Design. 
