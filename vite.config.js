@@ -1,9 +1,9 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig(() => {
-  const isGH = process.env.GITHUB_PAGES === 'true'
-  const repoName = process.env.GITHUB_REPOSITORY?.split('/')[1] || ''
+  const isGH = process.env.GITHUB_PAGES === 'true';
+  const repoName = process.env.GITHUB_REPOSITORY?.split('/')[1] || '';
 
   return {
     base: isGH && repoName ? `/${repoName}/` : '/',
@@ -13,7 +13,7 @@ export default defineConfig(() => {
         process: 'process/browser',
         buffer: 'buffer',
       },
-      extensions: ['.ts', '.tsx', '.js', '.jsx'], // ← optional, aber klar
+      extensions: ['.ts', '.tsx', '.js', '.jsx'],
     },
     define: {
       global: 'globalThis',
@@ -22,5 +22,19 @@ export default defineConfig(() => {
     optimizeDeps: {
       include: ['process', 'buffer'],
     },
-  }
-})
+    build: {
+      target: 'esnext',
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('mantine')) return 'vendor_mantine';
+              if (id.includes('@tabler/icons-react')) return 'vendor_icons';
+              return 'vendor';
+            }
+          },
+        },
+      },
+    },
+  };
+});

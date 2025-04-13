@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { SimpleGrid, Center } from '@mantine/core';
 import { QuixoTile } from './QuixoTile';
 
 export type QuixoCell = null | 'X' | 'O';
@@ -13,112 +12,88 @@ export interface QuixoBoardProps {
 
 export function QuixoBoard({ board, currentPlayer, mySide, onMove }: QuixoBoardProps) {
     const [selected, setSelected] = useState<{ row: number; col: number } | null>(null);
+    const windowWidth = window.innerWidth;
 
-    const isBorder = (row: number, col: number) => row === 0 || row === 4 || col === 0 || col === 4;
+    let numberValueRows = board.length;
+    let numberValueCols = board[0].length || numberValueRows;
 
-    const canSelect = (row: number, col: number) => {
-        if (!isBorder(row, col)) return false;
-        const value = board[row][col];
-        return value === null || value === mySide;
-    };
+    let tileWidth = 100
 
-    const getPushTargets = (row: number, col: number) => {
-        const targets: { row: number; col: number }[] = [];
-        if (row === 0) targets.push({ row: 4, col });
-        if (row === 4) targets.push({ row: 0, col });
-        if (col === 0) targets.push({ row, col: 4 });
-        if (col === 4) targets.push({ row, col: 0 });
-        return targets;
-    };
+    let numberRows = 1 + numberValueRows + 1;
+    let numberCols = 1 + numberValueCols + 1;
+
+    const GRID_INDICES = Array.from({ length: numberRows }, (_, i) => i);
+    const GRID_INDICES_COLS = Array.from({ length: numberCols }, (_, i) => i);
 
     const handleClick = (row: number, col: number) => {
-        if (currentPlayer !== mySide) return;
-
-        if (!selected) {
-            if (!canSelect(row, col)) return;
-            setSelected({ row, col });
-        } else {
-            const validTargets = getPushTargets(selected.row, selected.col);
-            if (!validTargets.some(t => t.row === row && t.col === col)) return;
-
-            const direction = getDirection(selected, { row, col });
-            const newBoard = applyMove(board, selected.row, selected.col, direction, mySide);
+        let clickOnSameField = selected?.row === row && selected?.col === col;
+        if(clickOnSameField) {
             setSelected(null);
-            onMove(newBoard);
-        }
-    };
-
-    const getDirection = (from: { row: number; col: number }, to: { row: number; col: number }): 'up' | 'down' | 'left' | 'right' => {
-        if (from.row === 0 && to.row === 4) return 'down';
-        if (from.row === 4 && to.row === 0) return 'up';
-        if (from.col === 0 && to.col === 4) return 'right';
-        if (from.col === 4 && to.col === 0) return 'left';
-        throw new Error('Invalid direction');
-    };
-
-    const applyMove = (board: QuixoCell[][], row: number, col: number, dir: 'up' | 'down' | 'left' | 'right', side: 'X' | 'O') => {
-        const newBoard = board.map(r => [...r]);
-        if (dir === 'up' || dir === 'down') {
-            const column = newBoard.map(r => r[col]);
-            if (dir === 'up') {
-                column.pop();
-                column.unshift(side);
-            } else {
-                column.shift();
-                column.push(side);
-            }
-            column.forEach((val, i) => newBoard[i][col] = val);
+            return;
         } else {
-            const rowArr = [...newBoard[row]];
-            if (dir === 'left') {
-                rowArr.pop();
-                rowArr.unshift(side);
+            if(selected){
+
             } else {
-                rowArr.shift();
-                rowArr.push(side);
+                setSelected({row, col});
             }
-            newBoard[row] = rowArr;
         }
-        return newBoard;
-    };
+    }
+
+    const isOuterCorner = (row: number, col: number) => {
+        return (
+            (row === 0 && col === 0) ||
+            (row === 0 && col === numberCols - 1) ||
+            (row === numberRows - 1 && col === 0) ||
+            (row === numberRows - 1 && col === numberCols - 1)
+        );
+    }
+
+    const isOuterRing = (row: number, col: number) => {
+        return (
+            row === 0 || row === numberRows - 1 ||
+            col === 0 || col === numberCols - 1
+        );
+    }
 
     return (
-        <Center>
-            <SimpleGrid cols={7} spacing={2}>
-                {[-1, 0, 1, 2, 3, 4, 5].map(r =>
-                    [-1, 0, 1, 2, 3, 4, 5].map(c => {
-                        const row = r;
-                        const col = c;
-                        if (row < 0 || row > 4 || col < 0 || col > 4) {
-                            const logicalRow = Math.max(0, Math.min(row, 4));
-                            const logicalCol = Math.max(0, Math.min(col, 4));
-                            const isTarget = selected && getPushTargets(selected.row, selected.col)
-                                .some(t => t.row === logicalRow && t.col === logicalCol);
+        <div style={{width: '100%', height: '100%', padding: 8 }}>
+            <div style={{display: 'flex', flexDirection: 'column', gap: 2}}>
+                {GRID_INDICES.map(row => (
+                    <div key={row} style={{display: 'flex', justifyContent: 'center', gap: 2}}>
+                        {GRID_INDICES_COLS.map(col => {
+                            let disabled = false;
+                            let inBoard = true;
+                            let isSelected = selected?.row === row && selected?.col === col;
+
+                            const value = board?.[row]?.[col];
+                            let content = <QuixoTile
+                                value={value}
+                                disabled={disabled}
+                                onClick={() => handleClick(row, col)}
+                                onCancel={isSelected ? () => setSelected(null) : undefined}
+                                isSelected={isSelected}
+                                isCorner={false}
+                            />
+
+
+                            let hidden = isOuterCorner(row, col);
+                            if(!selected && isOuterRing(row, col)) {
+                                hidden = true;
+                            }
+
+                            if (hidden) {
+                                content = null
+                            }
+
                             return (
-                                <QuixoTile
-                                    key={`${row}-${col}`}
-                                    value={null}
-                                    onClick={() => handleClick(logicalRow, logicalCol)}
-                                    disabled={!isTarget}
-                                />
+                                <div key={`${row}-${col}`} style={{width: tileWidth, height: tileWidth}}>
+                                    {content}
+                                </div>
                             );
-                        } else {
-                            return (
-                                <QuixoTile
-                                    key={`${row}-${col}`}
-                                    value={board[row][col]}
-                                    onClick={() => handleClick(row, col)}
-                                    disabled={
-                                        currentPlayer !== mySide ||
-                                        (!!selected && !(selected.row === row && selected.col === col)) ||
-                                        (!selected && !canSelect(row, col))
-                                    }
-                                />
-                            );
-                        }
-                    })
-                )}
-            </SimpleGrid>
-        </Center>
+                        })}
+                    </div>
+                ))}
+            </div>
+        </div>
     );
 }

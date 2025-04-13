@@ -30,9 +30,6 @@ function App() {
     const [joined, setJoined] = useState(false);
     const [connecting, setConnecting] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('');
-    const [toilet, setToilet] = useState(false);
-    const [examEnd, setExamEnd] = useState<Date | null>(null);
-    const [tiles, setTiles] = useState<any>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
     const [gameReady, setGameReady] = useState(false);
@@ -46,7 +43,7 @@ function App() {
     const connections = useRef<Record<string, Peer.DataConnection>>({});
     const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const mySide: 'X' | 'O' = roomId === peerRef.current?.id ? 'X' : 'O';
+    const [mySide, setMySide] = useState<'X' | 'O'>('X');
     const playerNames = {
         X: mySide === 'X' ? nickname : 'Gegner',
         O: mySide === 'O' ? nickname : 'Gegner'
@@ -55,8 +52,13 @@ function App() {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const peerId = params.get('peerId');
+        /**
         if (peerId) {
             setRoomIdInput(peerId);
+        }
+            */
+        if (peerId) {
+            handleJoin(peerId);
         }
     }, []);
 
@@ -79,6 +81,10 @@ function App() {
         const myPeerId = `${Date.now()}`;
         const peer = new Peer(myPeerId);
         peerRef.current = peer;
+
+        if(connectToId) {
+            setMySide('O');
+        }
 
         if (connectToId) {
             setConnecting(true);
@@ -121,9 +127,9 @@ function App() {
                 conn.send(JSON.stringify({ type: 'known-peers', data: allPeers }));
             }
             broadcast('new-peer', conn.peer);
-            broadcast('toilet', toilet);
-            broadcast('examEnd', examEnd);
-            broadcast('tiles', tiles);
+            //broadcast('toilet', toilet);
+            //broadcast('examEnd', examEnd);
+            //broadcast('tiles', tiles);
             if (Object.keys(connections.current).length > 0) {
                 setGameReady(true);
             }
@@ -132,9 +138,9 @@ function App() {
         conn.on('data', (data) => {
             try {
                 const msg = JSON.parse(data);
-                if (msg.type === 'toilet') setToilet(msg.data);
-                if (msg.type === 'examEnd') setExamEnd(new Date(msg.data));
-                if (msg.type === 'tiles') setTiles(msg.data);
+                //if (msg.type === 'toilet') setToilet(msg.data);
+                //if (msg.type === 'examEnd') setExamEnd(new Date(msg.data));
+                //if (msg.type === 'tiles') setTiles(msg.data);
                 if (msg.type === 'chat') setMessages((prev) => [...prev, msg.data]);
                 if (msg.type === 'quixo-state') {
                     setQuixoBoard(msg.data.board);
@@ -204,7 +210,7 @@ function App() {
     if (!joined) {
         return (
             <Container size="xs" mt="xl">
-                <Title order={2} mb="md">Prüfungsaufsichts-Dashboard</Title>
+                <Title order={2} mb="md">Penta-Push</Title>
                 <Stack>
                     <Text>Gib deinen Namen ein:</Text>
                     <TextInput value={nickname} onChange={(e) => setNickname(e.currentTarget.value)} />
@@ -227,14 +233,15 @@ function App() {
 
     return (
         <AppShell padding="md">
-            <SimpleGrid cols={6} spacing="md">
                 {!gameReady ? (
+                    <SimpleGrid cols={6} spacing="md">
                     <TileWrapper title="Warte auf zweiten Spieler ..." defaultSpan={6}>
                         <Stack align="center" gap="sm">
                             <Text>Ein weiterer Spieler muss dem Spiel beitreten.</Text>
                             <LinkTile title="Raum-Link teilen" roomId={roomId} />
                         </Stack>
                     </TileWrapper>
+                    </SimpleGrid>
                 ) : (
                     <>
                         <QuixoStatus
@@ -290,7 +297,6 @@ function App() {
                         />
                     </>
                 )}
-            </SimpleGrid>
         </AppShell>
     );
 }
