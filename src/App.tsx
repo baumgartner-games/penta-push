@@ -20,6 +20,8 @@ import { TimerTile } from './components/TimerTile';
 import { LinkTile } from './components/LinkTile';
 import { StatusTile } from './components/StatusTile';
 import { ChatTile, ChatMessage } from './components/ChatTile';
+import { QuixoStatus, checkWin } from './components/QuixoStatus';
+import {QuixoBoard} from "./components/QuixoBoard";
 
 function App() {
     const [nickname, setNickname] = useState('Anonym');
@@ -33,10 +35,22 @@ function App() {
     const [tiles, setTiles] = useState<any>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
-    const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [gameReady, setGameReady] = useState(false);
+
+    const [quixoBoard, setQuixoBoard] = useState<(null | 'X' | 'O')[][]>(Array(5).fill(null).map(() => Array(5).fill(null)));
+    const [quixoCurrentPlayer, setQuixoCurrentPlayer] = useState<'X' | 'O'>('X');
+    const [quixoScores, setQuixoScores] = useState<{ X: number; O: number }>({ X: 0, O: 0 });
+    const [quixoReady, setQuixoReady] = useState<{ X: boolean; O: boolean }>({ X: false, O: false });
 
     const peerRef = useRef<Peer | null>(null);
     const connections = useRef<Record<string, Peer.DataConnection>>({});
+    const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const mySide: 'X' | 'O' = roomId === peerRef.current?.id ? 'X' : 'O';
+    const playerNames = {
+        X: mySide === 'X' ? nickname : 'Gegner',
+        O: mySide === 'O' ? nickname : 'Gegner'
+    };
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -92,7 +106,6 @@ function App() {
 
         peer.on('connection', (conn) => {
             setupConnection(conn);
-            // Sobald sich jemand verbindet, senden wir die welcome-Nachricht
             conn.on('open', () => {
                 conn.send(JSON.stringify({ type: 'welcome' }));
             });
@@ -111,6 +124,9 @@ function App() {
             broadcast('toilet', toilet);
             broadcast('examEnd', examEnd);
             broadcast('tiles', tiles);
+            if (Object.keys(connections.current).length > 0) {
+                setGameReady(true);
+            }
         });
 
         conn.on('data', (data) => {
@@ -120,7 +136,12 @@ function App() {
                 if (msg.type === 'examEnd') setExamEnd(new Date(msg.data));
                 if (msg.type === 'tiles') setTiles(msg.data);
                 if (msg.type === 'chat') setMessages((prev) => [...prev, msg.data]);
-
+                if (msg.type === 'quixo-state') {
+                    setQuixoBoard(msg.data.board);
+                    setQuixoCurrentPlayer(msg.data.currentPlayer);
+                    setQuixoScores(msg.data.scores);
+                    setQuixoReady(msg.data.ready);
+                }
                 if (msg.type === 'known-peers') {
                     const peerIds: string[] = msg.data;
                     peerIds.forEach((pid) => {
@@ -129,14 +150,12 @@ function App() {
                         }
                     });
                 }
-
                 if (msg.type === 'new-peer') {
                     const newPeerId = msg.data;
                     if (newPeerId && newPeerId !== peerRef.current?.id && !connections.current[newPeerId]) {
                         connectToPeer(newPeerId);
                     }
                 }
-
                 if (msg.type === 'welcome') {
                     clearTimeout(connectionTimeoutRef.current!);
                     setConnecting(false);
@@ -209,41 +228,68 @@ function App() {
     return (
         <AppShell padding="md">
             <SimpleGrid cols={6} spacing="md">
-                <LinkTile title="Mein Raum-Link" roomId={roomId} />
-                <BooleanTile
-                    title="Toilette"
-                    value={toilet}
-                    onToggle={() => {
-                        const newVal = !toilet;
-                        setToilet(newVal);
-                        broadcast('toilet', newVal);
-                    }}
-                    onText="Toilette besetzt"
-                    offText="Toilette frei"
-                />
-                <TimerTile
-                    title="Klausurzeit"
-                    endTime={examEnd}
-                    onSetMinutes={(min) => {
-                        const end = new Date(Date.now() + min * 60000);
-                        setExamEnd(end);
-                        broadcast('examEnd', end);
-                    }}
-                />
-                <ChatTile
-                    title="Dozenten-Chat"
-                    messages={messages}
-                    onSend={(msg) => {
-                        setMessages((prev) => [...prev, msg]);
-                        broadcast('chat', msg);
-                    }}
-                    nickname={nickname}
-                />
-                <StatusTile
-                    title="Verbindung"
-                    peerId={peerRef.current?.id}
-                    connectedPeers={connectedPeers}
-                />
+                {!gameReady ? (
+                    <TileWrapper title="Warte auf zweiten Spieler ..." defaultSpan={6}>
+                        <Stack align="center" gap="sm">
+                            <Text>Ein weiterer Spieler muss dem Spiel beitreten.</Text>
+                            <LinkTile title="Raum-Link teilen" roomId={roomId} />
+                        </Stack>
+                    </TileWrapper>
+                ) : (
+                    <>
+                        <QuixoStatus
+                            currentPlayer={quixoCurrentPlayer}
+                            nickname={nickname}
+                            scores={quixoScores}
+                            ready={quixoReady}
+                            onToggleReady={() => {
+                                const newReady = { ...quixoReady, [mySide]: !quixoReady[mySide] };
+                                setQuixoReady(newReady);
+                                broadcast('quixo-state', {
+                                    board: quixoBoard,
+                                    currentPlayer: quixoCurrentPlayer,
+                                    scores: quixoScores,
+                                    ready: newReady
+                                });
+                            }}
+                            mySide={mySide}
+                            playerNames={playerNames}
+                        />
+                        <QuixoBoard
+                            board={quixoBoard}
+                            currentPlayer={quixoCurrentPlayer}
+                            mySide={mySide}
+                            onMove={(newBoard) => {
+                                const nextPlayer = quixoCurrentPlayer === 'X' ? 'O' : 'X';
+                                const winner = checkWin(newBoard);
+
+                                if (winner) {
+                                    const newScores = { ...quixoScores, [winner]: quixoScores[winner] + 1 };
+                                    const resetBoard = Array(5).fill(null).map(() => Array(5).fill(null));
+                                    setQuixoScores(newScores);
+                                    setQuixoBoard(resetBoard);
+                                    setQuixoCurrentPlayer('X');
+                                    setQuixoReady({ X: false, O: false });
+                                    broadcast('quixo-state', {
+                                        board: resetBoard,
+                                        currentPlayer: 'X',
+                                        scores: newScores,
+                                        ready: { X: false, O: false }
+                                    });
+                                } else {
+                                    setQuixoBoard(newBoard);
+                                    setQuixoCurrentPlayer(nextPlayer);
+                                    broadcast('quixo-state', {
+                                        board: newBoard,
+                                        currentPlayer: nextPlayer,
+                                        scores: quixoScores,
+                                        ready: { X: false, O: false }
+                                    });
+                                }
+                            }}
+                        />
+                    </>
+                )}
             </SimpleGrid>
         </AppShell>
     );
